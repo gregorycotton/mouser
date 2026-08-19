@@ -207,6 +207,12 @@
           "markdownDescription": "Enables the get_articles_page command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_feed_configuration command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-feed-configuration",
+          "markdownDescription": "Enables the get_feed_configuration command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_feed_sources command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-feed-sources",
@@ -265,6 +271,12 @@
           "type": "string",
           "const": "deny-get-articles-page",
           "markdownDescription": "Denies the get_articles_page command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_feed_configuration command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-feed-configuration",
+          "markdownDescription": "Denies the get_feed_configuration command without any pre-configured scope."
         },
         {
           "description": "Denies the get_feed_sources command without any pre-configured scope.",

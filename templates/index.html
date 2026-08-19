@@ -118,6 +118,24 @@
             margin-top: 10px;
         }
 
+        .feed-tag-filter-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            color: var(--color-meta);
+            font-size: 12px;
+        }
+
+        #feed-tag-filter {
+            border: 1px solid var(--color-border);
+            background-color: var(--bg-main);
+            color: var(--color-accent);
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            padding: 5px 8px;
+        }
+
         article {
             border-bottom: 1px solid var(--color-border);
             padding-bottom: 20px;
@@ -307,7 +325,7 @@
             flex-direction: column;
             gap: 18px;
             min-height: 0;
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         .settings-section {
@@ -327,12 +345,47 @@
             margin-top: 10px;
         }
 
+        .tag-add-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .tag-add-row input,
+        .feed-tags-input {
+            min-width: 0;
+            border: 1px solid var(--color-border);
+            background-color: var(--bg-main);
+            color: var(--color-text-main);
+            box-sizing: border-box;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            padding: 6px 8px;
+            height: 31px;
+        }
+
+        .tag-add-row input {
+            flex: 1;
+        }
+
+        .settings-tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .tag-chip {
+            border: 1px solid var(--color-border);
+            color: var(--color-text-main);
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
         .feed-settings-list {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            max-height: 380px;
-            overflow: auto;
             padding-right: 4px;
             margin-top: 10px;
         }
@@ -344,8 +397,62 @@
             align-items: center;
         }
 
-        .feed-settings-row[hidden] {
+        .feed-settings-item[hidden],
+        .feed-options-row[hidden] {
             display: none;
+        }
+
+        .feed-options-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 31px;
+            margin-top: 8px;
+            padding-bottom: 31px;
+        }
+
+        .feed-tag-picker {
+            position: relative;
+            min-width: 0;
+        }
+
+        .feed-tags-input {
+            width: 100%;
+        }
+
+        .tag-suggestions {
+            position: absolute;
+            z-index: 102;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid var(--color-border);
+            background-color: var(--bg-modal);
+        }
+
+        .tag-suggestion {
+            display: block;
+            width: 100%;
+            border: 0;
+            border-bottom: 1px solid var(--color-border);
+            background: none;
+            color: var(--color-text-main);
+            padding: 6px 8px;
+            text-align: left;
+            cursor: pointer;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+        }
+
+        .tag-suggestion:last-child {
+            border-bottom: 0;
+        }
+
+        .tag-suggestion:hover {
+            background-color: var(--color-modal-hover);
         }
 
         .feed-settings-row input,
@@ -384,7 +491,11 @@
                 padding-bottom: 10px;
             }
 
-            .feed-settings-row .delete-feed-btn {
+            .feed-options-row {
+                grid-template-columns: 1fr;
+            }
+
+            .feed-options-row .action-btn {
                 width: fit-content;
             }
         }
@@ -426,6 +537,12 @@
                 <button id="settings-btn" class="action-btn">Settings</button>
             </div>
         </div>
+        <div class="feed-tag-filter-row">
+            <label for="feed-tag-filter">Filter by tag</label>
+            <select id="feed-tag-filter">
+                <option value="">All feeds</option>
+            </select>
+        </div>
         <input type="text" id="search-bar" placeholder="Search feed">
         <div id="articles-container"></div>
     </div>
@@ -456,6 +573,15 @@
                     <button class="action-btn theme-btn" data-theme="flexoki" title="Flexoki (light)">Flexoki (light)</button>
                     <button class="action-btn theme-btn" data-theme="flexoki-dark" title="Flexoki (dark)">Flexoki (dark)</button>
                 </div>
+            </section>
+            <section class="settings-section">
+                <h3>Tags</h3>
+                <div class="tag-add-row">
+                    <input id="new-feed-tag-input" type="text" maxlength="40" placeholder="Tag name">
+                    <button id="add-feed-tag-btn" class="action-btn">Add tag</button>
+                </div>
+                <div id="settings-tag-list" class="settings-tag-list"></div>
+                <p id="tag-settings-message" class="settings-message"></p>
             </section>
             <section class="settings-section">
                 <div class="settings-section-header">
@@ -497,6 +623,7 @@
             const modalIframe = document.getElementById('modal-iframe');
             const archiveToggleButton = document.getElementById('archive-toggle-btn');
             const searchBar = document.getElementById('search-bar');
+            const feedTagFilter = document.getElementById('feed-tag-filter');
             const modalOverlay = document.getElementById('modal-overlay');
             const articleModal = document.getElementById('article-modal');
             const settingsModal = document.getElementById('settings-modal');
@@ -504,8 +631,12 @@
             const feedSettingsSearch = document.getElementById('feed-settings-search');
             const feedSearchEmpty = document.getElementById('feed-search-empty');
             const feedSettingsMessage = document.getElementById('feed-settings-message');
+            const newFeedTagInput = document.getElementById('new-feed-tag-input');
+            const settingsTagList = document.getElementById('settings-tag-list');
+            const tagSettingsMessage = document.getElementById('tag-settings-message');
             const loadFeedsInput = document.getElementById('load-feeds-input');
             let feedSources = [];
+            let feedTags = [];
 
             modalOverlay.style.display = 'none';
             articleModal.style.display = 'none';
@@ -594,21 +725,122 @@
                 feedSettingsMessage.style.color = isError ? 'var(--color-accent)' : 'var(--color-meta)';
             };
 
+            const setTagSettingsMessage = (message, isError = false) => {
+                tagSettingsMessage.textContent = message;
+                tagSettingsMessage.style.color = isError ? 'var(--color-accent)' : 'var(--color-meta)';
+            };
+
+            const cleanTagName = (value) => {
+                const tag = String(value || '').trim();
+                if (!tag) throw new Error('Enter a tag name.');
+                if (tag.toLowerCase() === 'misc.') throw new Error('Misc. is reserved for feeds without tags.');
+                if (tag.includes(',')) throw new Error('Tag names cannot contain commas.');
+                if (tag.length > 40) throw new Error('Tag names must be 40 characters or fewer.');
+                return tag;
+            };
+
+            const canonicalFeedTag = (value) => feedTags.find(tag => tag.toLowerCase() === value.trim().toLowerCase());
+
+            const renderTagSettings = () => {
+                settingsTagList.innerHTML = '';
+                if (feedTags.length === 0) {
+                    const emptyMessage = document.createElement('span');
+                    emptyMessage.className = 'settings-message';
+                    emptyMessage.textContent = 'No custom tags yet.';
+                    settingsTagList.appendChild(emptyMessage);
+                    return;
+                }
+
+                feedTags.forEach(tag => {
+                    const chip = document.createElement('span');
+                    chip.className = 'tag-chip';
+                    chip.textContent = tag;
+                    settingsTagList.appendChild(chip);
+                });
+            };
+
+            const renderFeedTagFilter = () => {
+                const selectedTag = feedTagFilter.value;
+                feedTagFilter.innerHTML = '';
+                feedTagFilter.appendChild(new Option('All feeds', ''));
+                feedTags.forEach(tag => feedTagFilter.appendChild(new Option(tag, tag)));
+                feedTagFilter.appendChild(new Option('Misc.', 'Misc.'));
+                feedTagFilter.value = Array.from(feedTagFilter.options).some(option => option.value === selectedTag)
+                    ? selectedTag
+                    : '';
+            };
+
+            const addFeedTag = () => {
+                try {
+                    const tag = cleanTagName(newFeedTagInput.value);
+                    if (canonicalFeedTag(tag)) throw new Error(`${tag} already exists.`);
+                    if (feedTags.length >= 100) throw new Error('A maximum of 100 custom tags is supported.');
+                    feedTags.push(tag);
+                    newFeedTagInput.value = '';
+                    renderTagSettings();
+                    setTagSettingsMessage('Tag added. Press Save feeds to apply.');
+                } catch (error) {
+                    setTagSettingsMessage(String(error), true);
+                }
+            };
+
+            const parseFeedTagInput = (value) => {
+                const selectedTags = [];
+                for (const rawTag of value.split(',').map(tag => tag.trim()).filter(Boolean)) {
+                    const tag = canonicalFeedTag(rawTag);
+                    if (!tag) throw new Error(`Unknown tag: ${rawTag}`);
+                    if (!selectedTags.includes(tag)) selectedTags.push(tag);
+                }
+                return selectedTags;
+            };
+
+            const renderTagSuggestions = (input) => {
+                const suggestions = input.closest('.feed-tag-picker').querySelector('.tag-suggestions');
+                const parts = input.value.split(',');
+                const query = parts.pop().trim().toLowerCase();
+                const selectedTags = parts
+                    .map(tag => canonicalFeedTag(tag))
+                    .filter(Boolean);
+                const matches = query
+                    ? feedTags.filter(tag =>
+                        !selectedTags.includes(tag) && tag.toLowerCase().includes(query)
+                    )
+                    : [];
+
+                suggestions.innerHTML = '';
+                matches.forEach(tag => {
+                    const option = document.createElement('button');
+                    option.type = 'button';
+                    option.className = 'tag-suggestion';
+                    option.textContent = tag;
+                    option.addEventListener('mousedown', event => event.preventDefault());
+                    option.addEventListener('click', () => {
+                        const values = input.value.split(',').slice(0, -1).map(value => value.trim()).filter(Boolean);
+                        if (!values.some(value => value.toLowerCase() === tag.toLowerCase())) values.push(tag);
+                        input.value = `${values.join(', ')}, `;
+                        input.focus();
+                        renderTagSuggestions(input);
+                    });
+                    suggestions.appendChild(option);
+                });
+                suggestions.hidden = document.activeElement !== input || matches.length === 0;
+            };
+
             const filterFeedSettings = () => {
                 const query = feedSettingsSearch.value.trim().toLowerCase();
-                const rows = feedSettingsList.querySelectorAll('.feed-settings-row');
-                let matchingRows = 0;
+                const items = feedSettingsList.querySelectorAll('.feed-settings-item');
+                let matchingItems = 0;
 
-                rows.forEach(row => {
-                    const searchableText = Array.from(row.querySelectorAll('input, select'))
+                items.forEach(item => {
+                    const searchableText = Array.from(item.querySelectorAll('input, select'))
                         .map(field => field.value)
                         .join(' ')
                         .toLowerCase();
-                    row.hidden = Boolean(query) && !searchableText.includes(query);
-                    if (!row.hidden) matchingRows += 1;
+                    item.hidden = Boolean(query) && !searchableText.includes(query);
+                    if (!item.hidden) matchingItems += 1;
                 });
 
-                feedSearchEmpty.hidden = !query || matchingRows > 0 || rows.length === 0;
+                feedSearchEmpty.hidden = !query || matchingItems > 0 || items.length === 0;
             };
 
             const renderFeedSettings = () => {
@@ -624,6 +856,10 @@
                 }
 
                 feedSources.forEach((source, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'feed-settings-item';
+                    item.dataset.index = String(index);
+
                     const row = document.createElement('div');
                     row.className = 'feed-settings-row';
                     row.dataset.index = String(index);
@@ -647,13 +883,51 @@
                     typeSelect.append(blogOption, youtubeOption);
                     typeSelect.value = source.type || source.source_type || 'blog';
 
+                    const optionsButton = document.createElement('button');
+                    optionsButton.type = 'button';
+                    optionsButton.className = 'action-btn feed-options-btn';
+                    optionsButton.textContent = 'Options';
+
+                    const optionsRow = document.createElement('div');
+                    optionsRow.className = 'feed-options-row';
+                    optionsRow.hidden = true;
+
+                    const tagPicker = document.createElement('div');
+                    tagPicker.className = 'feed-tag-picker';
+                    const tagsInput = document.createElement('input');
+                    tagsInput.type = 'text';
+                    tagsInput.className = 'feed-tags-input';
+                    tagsInput.placeholder = 'Add tags';
+                    tagsInput.value = (source.tags || []).join(', ');
+                    const tagSuggestions = document.createElement('div');
+                    tagSuggestions.className = 'tag-suggestions';
+                    tagSuggestions.hidden = true;
+                    tagPicker.append(tagsInput, tagSuggestions);
+
+                    tagsInput.addEventListener('input', () => renderTagSuggestions(tagsInput));
+                    tagsInput.addEventListener('blur', () => { tagSuggestions.hidden = true; });
+                    tagsInput.addEventListener('keydown', event => {
+                        if (event.key !== 'Enter') return;
+                        const firstSuggestion = tagSuggestions.querySelector('.tag-suggestion');
+                        if (!firstSuggestion) return;
+                        event.preventDefault();
+                        firstSuggestion.click();
+                    });
+
+                    const saveTagsButton = document.createElement('button');
+                    saveTagsButton.type = 'button';
+                    saveTagsButton.className = 'action-btn save-feed-tags-btn';
+                    saveTagsButton.textContent = 'Save tags';
+
                     const deleteButton = document.createElement('button');
                     deleteButton.type = 'button';
                     deleteButton.className = 'action-btn delete-feed-btn';
-                    deleteButton.textContent = 'Delete';
+                    deleteButton.textContent = 'Delete feed';
 
-                    row.append(nameInput, rssInput, typeSelect, deleteButton);
-                    feedSettingsList.appendChild(row);
+                    row.append(nameInput, rssInput, typeSelect, optionsButton);
+                    optionsRow.append(tagPicker, saveTagsButton, deleteButton);
+                    item.append(row, optionsRow);
+                    feedSettingsList.appendChild(item);
                 });
 
                 filterFeedSettings();
@@ -667,31 +941,49 @@
                     const name = row.querySelector('[data-field="name"]').value.trim();
                     const rss = row.querySelector('[data-field="rss"]').value.trim();
                     const type = row.querySelector('[data-field="type"]').value;
+                    const sourceIndex = Number(row.dataset.index);
+                    const tags = feedSources[sourceIndex]?.tags || [];
 
                     if (!allowIncomplete && !name && !rss) return;
                     if (!allowIncomplete && (!name || !rss)) {
                         throw new Error(`Feed ${index + 1} needs both a name and a URL.`);
                     }
 
-                    sources.push({ name, rss, type });
+                    sources.push({ name, rss, type, tags });
                 });
 
                 return sources;
             };
 
-            const parseFeedSourcesJson = (json) => {
-                let sources;
+            const parseFeedConfigJson = (json) => {
+                let parsed;
                 try {
-                    sources = JSON.parse(json);
+                    parsed = JSON.parse(json);
                 } catch {
                     throw new Error('The selected file is not valid JSON.');
                 }
 
+                const isLegacyExport = Array.isArray(parsed);
+                const sources = isLegacyExport ? parsed : parsed?.feeds;
                 if (!Array.isArray(sources)) {
-                    throw new Error('Feed JSON must be an array.');
+                    throw new Error('Feed JSON must contain a feeds array.');
                 }
 
-                return sources.map((source, index) => {
+                const rawTags = isLegacyExport
+                    ? sources.flatMap(source => Array.isArray(source?.tags) ? source.tags : [])
+                    : (parsed.tags || []);
+                if (!Array.isArray(rawTags)) throw new Error('Feed JSON tags must be an array.');
+
+                const importedTags = [];
+                rawTags.forEach(rawTag => {
+                    if (typeof rawTag !== 'string') throw new Error('Tag names must be text.');
+                    const tag = cleanTagName(rawTag);
+                    if (!importedTags.some(existing => existing.toLowerCase() === tag.toLowerCase())) {
+                        importedTags.push(tag);
+                    }
+                });
+
+                const importedSources = sources.map((source, index) => {
                     const feedNumber = index + 1;
                     if (!source || typeof source !== 'object' || Array.isArray(source)) {
                         throw new Error(`Feed ${feedNumber} must be an object.`);
@@ -718,12 +1010,25 @@
                         throw new Error(`Feed ${feedNumber} must use an HTTP or HTTPS URL.`);
                     }
 
+                    if (source.tags !== undefined && !Array.isArray(source.tags)) {
+                        throw new Error(`Feed ${feedNumber} tags must be an array.`);
+                    }
+                    const tags = (source.tags || []).map(rawTag => {
+                        if (typeof rawTag !== 'string') throw new Error(`Feed ${feedNumber} has an invalid tag.`);
+                        const tag = importedTags.find(existing => existing.toLowerCase() === rawTag.trim().toLowerCase());
+                        if (!tag) throw new Error(`Feed ${feedNumber} uses an unknown tag: ${rawTag}`);
+                        return tag;
+                    }).filter((tag, tagIndex, allTags) => allTags.indexOf(tag) === tagIndex);
+
                     return {
                         name: source.name.trim(),
                         rss: source.rss.trim(),
-                        type
+                        type,
+                        tags
                     };
                 });
+
+                return { tags: importedTags, feeds: importedSources };
             };
 
             const loadFeedSettingsJson = async () => {
@@ -735,12 +1040,14 @@
                     if (file.size > 5 * 1024 * 1024) {
                         throw new Error('Feed JSON must be smaller than 5 MB.');
                     }
-                    const importedSources = parseFeedSourcesJson(await file.text());
-                    feedSources = importedSources;
+                    const importedConfig = parseFeedConfigJson(await file.text());
+                    feedTags = importedConfig.tags;
+                    feedSources = importedConfig.feeds;
                     feedSettingsSearch.value = '';
+                    renderTagSettings();
                     renderFeedSettings();
-                    const noun = importedSources.length === 1 ? 'feed' : 'feeds';
-                    setFeedSettingsMessage(`Loaded ${importedSources.length} ${noun}. Press Save feeds to apply.`);
+                    const noun = feedSources.length === 1 ? 'feed' : 'feeds';
+                    setFeedSettingsMessage(`Loaded ${feedSources.length} ${noun}. Press Save feeds to apply.`);
                 } catch (error) {
                     console.error('Error loading feed JSON:', error);
                     setFeedSettingsMessage(String(error), true);
@@ -770,8 +1077,12 @@
                 feedSettingsList.innerHTML = '';
 
                 try {
-                    feedSources = await invoke('get_feed_sources');
+                    const config = await invoke('get_feed_configuration');
+                    feedSources = config.feeds || [];
+                    feedTags = config.tags || [];
+                    renderTagSettings();
                     renderFeedSettings();
+                    setTagSettingsMessage('');
                     setFeedSettingsMessage('');
                 } catch (error) {
                     console.error('Error loading feed settings:', error);
@@ -790,9 +1101,13 @@
                 try {
                     const sources = collectFeedSettings();
                     setFeedSettingsMessage('Saving feeds.');
-                    const savedSources = await invoke('save_feed_sources', { sources });
-                    feedSources = savedSources;
+                    const savedConfig = await invoke('save_feed_sources', { sources, tags: feedTags });
+                    feedSources = savedConfig.feeds || [];
+                    feedTags = savedConfig.tags || [];
+                    renderTagSettings();
+                    renderFeedTagFilter();
                     renderFeedSettings();
+                    setTagSettingsMessage('');
                     setFeedSettingsMessage('Saved.');
                     if (syncPromise) await syncPromise.catch(() => {});
                     await refreshFeeds();
@@ -924,6 +1239,7 @@
                         archived: isShowingArchive,
                         cursor: reset ? null : nextCursor,
                         query: searchBar.value.trim() || null,
+                        tag: feedTagFilter.value || null,
                         limit,
                     });
                     if (requestId !== pageRequestId) return;
@@ -945,7 +1261,9 @@
                 if (allEntries.length === 0) {
                     const emptyMessage = searchBar.value.trim()
                         ? 'No matching articles.'
-                        : (isShowingArchive ? 'Your archive is empty.' : 'All caught up!');
+                        : (feedTagFilter.value
+                            ? 'No articles in this tag.'
+                            : (isShowingArchive ? 'Your archive is empty.' : 'All caught up!'));
                     articlesContainer.innerHTML = `<p class="loading-message">${emptyMessage}</p>`;
                     return;
                 }
@@ -996,17 +1314,40 @@
                     console.error('Error loading feed:', error);
                 }
             };
+
+            const initializeFeed = async () => {
+                try {
+                    const config = await invoke('get_feed_configuration');
+                    feedSources = config.feeds || [];
+                    feedTags = config.tags || [];
+                    renderFeedTagFilter();
+                } catch (error) {
+                    console.error('Error loading feed tags:', error);
+                }
+                await loadFeed();
+            };
             
             document.getElementById('reload-btn').addEventListener('click', () => {
                 refreshFeeds().catch(() => {});
             });
             document.getElementById('settings-btn').addEventListener('click', openSettings);
+            feedTagFilter.addEventListener('change', () => {
+                loadArticlesPage({ reset: true }).catch(error => {
+                    console.error('Error filtering articles by tag:', error);
+                });
+            });
+            document.getElementById('add-feed-tag-btn').addEventListener('click', addFeedTag);
+            newFeedTagInput.addEventListener('keydown', event => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                addFeedTag();
+            });
             feedSettingsSearch.addEventListener('input', filterFeedSettings);
             document.getElementById('load-feeds-btn').addEventListener('click', () => loadFeedsInput.click());
             loadFeedsInput.addEventListener('change', loadFeedSettingsJson);
             document.getElementById('add-feed-btn').addEventListener('click', () => {
                 feedSources = collectFeedSettings({ allowIncomplete: true });
-                feedSources.push({ name: '', rss: '', type: 'blog' });
+                feedSources.push({ name: '', rss: '', type: 'blog', tags: [] });
                 feedSettingsSearch.value = '';
                 renderFeedSettings();
                 setFeedSettingsMessage('');
@@ -1016,13 +1357,38 @@
             document.getElementById('done-settings-btn').addEventListener('click', closeSettingsModal);
             document.getElementById('close-settings-btn').addEventListener('click', closeSettingsModal);
             feedSettingsList.addEventListener('click', (event) => {
-                if (!event.target.classList.contains('delete-feed-btn')) return;
-                const row = event.target.closest('.feed-settings-row');
-                if (!row) return;
-                feedSources = collectFeedSettings({ allowIncomplete: true });
-                feedSources.splice(Number(row.dataset.index), 1);
-                renderFeedSettings();
-                setFeedSettingsMessage('');
+                const item = event.target.closest('.feed-settings-item');
+                if (!item) return;
+                const sourceIndex = Number(item.dataset.index);
+
+                if (event.target.classList.contains('feed-options-btn')) {
+                    const optionsRow = item.querySelector('.feed-options-row');
+                    optionsRow.hidden = !optionsRow.hidden;
+                    if (!optionsRow.hidden) item.querySelector('.feed-tags-input').focus();
+                    return;
+                }
+
+                if (event.target.classList.contains('save-feed-tags-btn')) {
+                    try {
+                        const tagsInput = item.querySelector('.feed-tags-input');
+                        const selectedTags = parseFeedTagInput(tagsInput.value);
+                        feedSources = collectFeedSettings({ allowIncomplete: true });
+                        feedSources[sourceIndex].tags = selectedTags;
+                        tagsInput.value = selectedTags.join(', ');
+                        item.querySelector('.feed-options-row').hidden = true;
+                        setFeedSettingsMessage('Tags updated. Press Save feeds to apply.');
+                    } catch (error) {
+                        setFeedSettingsMessage(String(error), true);
+                    }
+                    return;
+                }
+
+                if (event.target.classList.contains('delete-feed-btn')) {
+                    feedSources = collectFeedSettings({ allowIncomplete: true });
+                    feedSources.splice(sourceIndex, 1);
+                    renderFeedSettings();
+                    setFeedSettingsMessage('Feed removed. Press Save feeds to apply.');
+                }
             });
             archiveToggleButton.addEventListener('click', async () => {
                 isShowingArchive = !isShowingArchive;
@@ -1147,7 +1513,7 @@
             const preferredTheme = localStorage.getItem('preferredTheme');
             const availableTheme = preferredTheme === 'post-it' ? 'flexoki' : preferredTheme;
             applyTheme(['light', 'flexoki', 'flexoki-dark'].includes(availableTheme) ? availableTheme : 'light');
-            loadFeed();
+            initializeFeed();
             setInterval(() => {
                 refreshFeeds().catch(() => {});
             }, REFRESH_INTERVAL_MS);

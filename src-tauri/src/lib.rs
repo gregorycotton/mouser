@@ -39,6 +39,22 @@ struct FeedSource {
         skip_serializing_if = "is_default_source_type"
     )]
     source_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+struct FeedConfig {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
+    feeds: Vec<FeedSource>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredFeedConfig {
+    Current(FeedConfig),
+    Legacy(Vec<FeedSource>),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -151,6 +167,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_articles_page,
             refresh_feeds,
+            get_feed_configuration,
             get_feed_sources,
             save_feed_sources,
             export_feed_sources,
@@ -173,12 +190,21 @@ async fn get_feed_sources(state: State<'_, AppState>) -> Result<Vec<FeedSource>,
 }
 
 #[tauri::command]
+async fn get_feed_configuration(state: State<'_, AppState>) -> Result<FeedConfig, String> {
+    let feeds_path = state.feeds_path.clone();
+    tauri::async_runtime::spawn_blocking(move || load_feed_config(&feeds_path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 async fn save_feed_sources(
     state: State<'_, AppState>,
     sources: Vec<FeedSource>,
-) -> Result<Vec<FeedSource>, String> {
+    tags: Vec<String>,
+) -> Result<FeedConfig, String> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || write_sources(&state, sources))
+    tauri::async_runtime::spawn_blocking(move || write_sources(&state, sources, tags))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -203,12 +229,17 @@ async fn get_articles_page(
     archived: bool,
     cursor: Option<ArticleCursor>,
     query: Option<String>,
+    tag: Option<String>,
     limit: Option<u32>,
 ) -> Result<ArticlePage, String> {
     let db_path = state.db_path.clone();
+    let feeds_path = state.feeds_path.clone();
     let limit = limit.unwrap_or(20).clamp(1, 200) as usize;
     tauri::async_runtime::spawn_blocking(move || {
-        read_articles_page(&db_path, archived, cursor, query, limit)
+        let feed_urls = tag
+            .map(|tag| load_feed_config(&feeds_path).map(|config| feed_urls_for_tag(&config, &tag)))
+            .transpose()?;
+        read_articles_page(&db_path, archived, cursor, query, feed_urls, limit)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -438,8 +469,29 @@ fn prune_cache(connection: &mut Connection) -> Result<(), String> {
 }
 
 fn load_sources(feeds_path: &Path) -> Result<Vec<FeedSource>, String> {
+    Ok(load_feed_config(feeds_path)?.feeds)
+}
+
+fn load_feed_config(feeds_path: &Path) -> Result<FeedConfig, String> {
     let config = fs::read_to_string(feeds_path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&config).map_err(|error| format!("Could not parse feeds.json: {error}"))
+    let stored: StoredFeedConfig = serde_json::from_str(&config)
+        .map_err(|error| format!("Could not parse feeds.json: {error}"))?;
+
+    Ok(match stored {
+        StoredFeedConfig::Current(config) => config,
+        StoredFeedConfig::Legacy(feeds) => {
+            let mut tags = Vec::new();
+            for tag in feeds.iter().flat_map(|feed| &feed.tags) {
+                if !tags
+                    .iter()
+                    .any(|existing: &String| existing.eq_ignore_ascii_case(tag))
+                {
+                    tags.push(tag.clone());
+                }
+            }
+            FeedConfig { tags, feeds }
+        }
+    })
 }
 
 fn export_sources(feeds_path: &Path, export_dir: &Path) -> Result<PathBuf, String> {
@@ -459,7 +511,12 @@ fn export_sources(feeds_path: &Path, export_dir: &Path) -> Result<PathBuf, Strin
     Ok(export_path)
 }
 
-fn write_sources(state: &AppState, sources: Vec<FeedSource>) -> Result<Vec<FeedSource>, String> {
+fn write_sources(
+    state: &AppState,
+    sources: Vec<FeedSource>,
+    tags: Vec<String>,
+) -> Result<FeedConfig, String> {
+    let cleaned_tags = clean_custom_tags(tags)?;
     let mut cleaned_sources = Vec::new();
 
     for source in sources {
@@ -483,18 +540,87 @@ fn write_sources(state: &AppState, sources: Vec<FeedSource>) -> Result<Vec<FeedS
         }
 
         validate_feed_url(&rss)?;
+        let tags = clean_source_tags(source.tags, &cleaned_tags)?;
 
         cleaned_sources.push(FeedSource {
             name,
             rss,
             source_type,
+            tags,
         });
     }
 
-    let serialized =
-        serde_json::to_string_pretty(&cleaned_sources).map_err(|error| error.to_string())?;
+    let config = FeedConfig {
+        tags: cleaned_tags,
+        feeds: cleaned_sources,
+    };
+    let serialized = serde_json::to_string_pretty(&config).map_err(|error| error.to_string())?;
     fs::write(&state.feeds_path, format!("{serialized}\n")).map_err(|error| error.to_string())?;
-    Ok(cleaned_sources)
+    Ok(config)
+}
+
+fn clean_custom_tags(tags: Vec<String>) -> Result<Vec<String>, String> {
+    let mut cleaned = Vec::new();
+
+    for tag in tags {
+        let tag = tag.trim().to_string();
+        if tag.is_empty() {
+            continue;
+        }
+        if tag.eq_ignore_ascii_case("Misc.") {
+            return Err("Misc. is reserved for feeds without tags.".to_string());
+        }
+        if tag.contains(',') {
+            return Err(format!("Tag names cannot contain commas: {tag}"));
+        }
+        if tag.chars().count() > 40 {
+            return Err(format!("Tag names must be 40 characters or fewer: {tag}"));
+        }
+        if !cleaned
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(&tag))
+        {
+            cleaned.push(tag);
+        }
+    }
+
+    if cleaned.len() > 100 {
+        return Err("A maximum of 100 custom tags is supported.".to_string());
+    }
+    Ok(cleaned)
+}
+
+fn clean_source_tags(tags: Vec<String>, available_tags: &[String]) -> Result<Vec<String>, String> {
+    let mut cleaned = Vec::new();
+
+    for tag in tags {
+        let canonical = available_tags
+            .iter()
+            .find(|available| available.eq_ignore_ascii_case(tag.trim()))
+            .ok_or_else(|| format!("Unknown feed tag: {tag}"))?;
+        if !cleaned.contains(canonical) {
+            cleaned.push(canonical.clone());
+        }
+    }
+
+    Ok(cleaned)
+}
+
+fn feed_urls_for_tag(config: &FeedConfig, tag: &str) -> Vec<String> {
+    config
+        .feeds
+        .iter()
+        .filter(|feed| {
+            if tag.eq_ignore_ascii_case("Misc.") {
+                feed.tags.is_empty()
+            } else {
+                feed.tags
+                    .iter()
+                    .any(|feed_tag| feed_tag.eq_ignore_ascii_case(tag))
+            }
+        })
+        .map(|feed| feed.rss.clone())
+        .collect()
 }
 
 fn validate_feed_url(url: &str) -> Result<(), String> {
@@ -577,9 +703,27 @@ fn read_articles_page(
     archived: bool,
     cursor: Option<ArticleCursor>,
     query: Option<String>,
+    feed_urls: Option<Vec<String>>,
     limit: usize,
 ) -> Result<ArticlePage, String> {
     let connection = Connection::open(db_path).map_err(|error| error.to_string())?;
+    let has_feed_filter = i64::from(feed_urls.is_some());
+    connection
+        .execute(
+            "CREATE TEMP TABLE selected_feed_filter (feed_url TEXT PRIMARY KEY)",
+            [],
+        )
+        .map_err(|error| error.to_string())?;
+    if let Some(feed_urls) = feed_urls {
+        for feed_url in feed_urls {
+            connection
+                .execute(
+                    "INSERT OR IGNORE INTO selected_feed_filter (feed_url) VALUES (?)",
+                    params![feed_url],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+    }
     let archived_flag = i64::from(archived);
     let normalized_query = query
         .map(|value| value.trim().to_string())
@@ -619,8 +763,12 @@ fn read_articles_page(
                  OR a.published_ts < ?3
                  OR (a.published_ts = ?3 AND a.article_id < ?4)
               )
+              AND (
+                    ?5 = 0
+                 OR a.feed_url IN (SELECT feed_url FROM selected_feed_filter)
+              )
             ORDER BY a.published_ts DESC, a.article_id DESC
-            LIMIT ?5
+            LIMIT ?6
             "#,
         )
         .map_err(|error| error.to_string())?;
@@ -631,6 +779,7 @@ fn read_articles_page(
                 normalized_query,
                 cursor_ts,
                 cursor_id,
+                has_feed_filter,
                 (limit + 1) as i64
             ],
             |row| {
@@ -1114,15 +1263,75 @@ mod tests {
             )
             .unwrap();
 
-        let first = read_articles_page(&db_path, false, None, None, 1).unwrap();
+        let first = read_articles_page(&db_path, false, None, None, None, 1).unwrap();
         assert_eq!(first.entries[0].id, "newest");
-        let second = read_articles_page(&db_path, false, first.next_cursor, None, 1).unwrap();
+        let second = read_articles_page(&db_path, false, first.next_cursor, None, None, 1).unwrap();
         assert_eq!(second.entries[0].id, "oldest");
-        let archive = read_articles_page(&db_path, true, None, None, 20).unwrap();
+        let archive = read_articles_page(&db_path, true, None, None, None, 20).unwrap();
         assert_eq!(archive.entries[0].id, "archived");
 
         drop(connection);
         fs::remove_file(db_path).ok();
+    }
+
+    #[test]
+    fn filters_articles_by_tagged_feed_urls() {
+        let db_path = temporary_db("tag-filter");
+        init_db(&db_path).unwrap();
+        let connection = Connection::open(&db_path).unwrap();
+        insert_article(&connection, "tech", 2);
+        insert_article(&connection, "misc", 1);
+        connection
+            .execute(
+                "UPDATE articles SET feed_url = 'https://example.com/tech' WHERE article_id = 'tech'",
+                [],
+            )
+            .unwrap();
+
+        let page = read_articles_page(
+            &db_path,
+            false,
+            None,
+            None,
+            Some(vec!["https://example.com/tech".to_string()]),
+            20,
+        )
+        .unwrap();
+
+        assert_eq!(page.entries.len(), 1);
+        assert_eq!(page.entries[0].id, "tech");
+        drop(connection);
+        fs::remove_file(db_path).ok();
+    }
+
+    #[test]
+    fn resolves_custom_and_misc_feed_tags() {
+        let config = FeedConfig {
+            tags: vec!["Tech".to_string(), "Culture".to_string()],
+            feeds: vec![
+                FeedSource {
+                    name: "Tagged".to_string(),
+                    rss: "https://example.com/tagged".to_string(),
+                    source_type: "blog".to_string(),
+                    tags: vec!["Tech".to_string(), "Culture".to_string()],
+                },
+                FeedSource {
+                    name: "Untagged".to_string(),
+                    rss: "https://example.com/misc".to_string(),
+                    source_type: "blog".to_string(),
+                    tags: Vec::new(),
+                },
+            ],
+        };
+
+        assert_eq!(
+            feed_urls_for_tag(&config, "tech"),
+            vec!["https://example.com/tagged"]
+        );
+        assert_eq!(
+            feed_urls_for_tag(&config, "Misc."),
+            vec!["https://example.com/misc"]
+        );
     }
 
     #[test]
@@ -1173,6 +1382,7 @@ mod tests {
                     name: "Author".to_string(),
                     rss: "https://example.com/feed".to_string(),
                     source_type: "blog".to_string(),
+                    tags: Vec::new(),
                 },
                 entries: vec![CachedFeedEntry {
                     entry: FeedEntry {

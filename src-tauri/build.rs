@@ -17,6 +17,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "get_articles_page",
             "refresh_feeds",
+            "get_feed_configuration",
             "get_feed_sources",
             "save_feed_sources",
             "export_feed_sources",
