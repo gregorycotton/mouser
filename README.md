@@ -99,8 +99,8 @@ Mouser uses Arial throughout the interface. **Light** is the default theme. Sett
 Application data is stored outside the repository at:
 
 ```text
-~/Library/Application Support/com.gregorycotton.gregs-feed/feeds.json
-~/Library/Application Support/com.gregorycotton.gregs-feed/archive.sqlite3
+~/Library/Application Support/<app-bundle-identifier>/feeds.json
+~/Library/Application Support/<app-bundle-identifier>/archive.sqlite3
 ```
 
 `feeds.json` contains the saved feed and tag configuration. Despite its historical filename, `archive.sqlite3` contains the article cache, archive state, feed HTTP validators, and deletion tombstones. Legacy feed configurations remain readable, and existing databases are migrated in place when the app launches.
