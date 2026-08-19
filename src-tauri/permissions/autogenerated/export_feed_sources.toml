@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-feed-sources"
+description = "Enables the export_feed_sources command without any pre-configured scope."
+commands.allow = ["export_feed_sources"]
+
+[[permission]]
+identifier = "deny-export-feed-sources"
+description = "Denies the export_feed_sources command without any pre-configured scope."
+commands.deny = ["export_feed_sources"]

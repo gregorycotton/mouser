@@ -189,6 +189,12 @@
           "markdownDescription": "Enables the delete_article command without any pre-configured scope."
         },
         {
+          "description": "Enables the export_feed_sources command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-feed-sources",
+          "markdownDescription": "Enables the export_feed_sources command without any pre-configured scope."
+        },
+        {
           "description": "Allows the bundled Mouser interface to access its RSS, archive, settings, and browser commands.",
           "type": "string",
           "const": "allow-feed-commands",
@@ -247,6 +253,12 @@
           "type": "string",
           "const": "deny-delete-article",
           "markdownDescription": "Denies the delete_article command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the export_feed_sources command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-feed-sources",
+          "markdownDescription": "Denies the export_feed_sources command without any pre-configured scope."
         },
         {
           "description": "Denies the get_articles_page command without any pre-configured scope.",

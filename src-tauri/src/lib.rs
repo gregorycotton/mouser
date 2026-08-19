@@ -17,7 +17,7 @@ use reqwest::{
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use url::Url;
 
 const DEFAULT_FEEDS: &str = include_str!(concat!(env!("OUT_DIR"), "/default-feeds.json"));
@@ -153,6 +153,7 @@ pub fn run() {
             refresh_feeds,
             get_feed_sources,
             save_feed_sources,
+            export_feed_sources,
             archive_article,
             reinstate_article,
             delete_article,
@@ -180,6 +181,20 @@ async fn save_feed_sources(
     tauri::async_runtime::spawn_blocking(move || write_sources(&state, sources))
         .await
         .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn export_feed_sources(app: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+    let feeds_path = state.feeds_path.clone();
+    let downloads_path = app
+        .path()
+        .download_dir()
+        .map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        export_sources(&feeds_path, &downloads_path).map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -425,6 +440,23 @@ fn prune_cache(connection: &mut Connection) -> Result<(), String> {
 fn load_sources(feeds_path: &Path) -> Result<Vec<FeedSource>, String> {
     let config = fs::read_to_string(feeds_path).map_err(|error| error.to_string())?;
     serde_json::from_str(&config).map_err(|error| format!("Could not parse feeds.json: {error}"))
+}
+
+fn export_sources(feeds_path: &Path, export_dir: &Path) -> Result<PathBuf, String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let mut export_path = export_dir.join(format!("mouser-feeds-{timestamp}.json"));
+    let mut suffix = 2;
+
+    while export_path.exists() {
+        export_path = export_dir.join(format!("mouser-feeds-{timestamp}-{suffix}.json"));
+        suffix += 1;
+    }
+
+    fs::copy(feeds_path, &export_path).map_err(|error| error.to_string())?;
+    Ok(export_path)
 }
 
 fn write_sources(state: &AppState, sources: Vec<FeedSource>) -> Result<Vec<FeedSource>, String> {
@@ -1041,6 +1073,30 @@ mod tests {
                 params![id, format!("https://example.com/{id}"), id, timestamp],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn exports_feeds_without_modifying_source() {
+        let test_dir = std::env::temp_dir().join(format!(
+            "mouser-export-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let downloads_dir = test_dir.join("Downloads");
+        fs::create_dir_all(&downloads_dir).unwrap();
+        let feeds_path = test_dir.join("feeds.json");
+        let feeds_json = "[{\"name\":\"Example\",\"rss\":\"https://example.com/feed\"}]\n";
+        fs::write(&feeds_path, feeds_json).unwrap();
+
+        let export_path = export_sources(&feeds_path, &downloads_dir).unwrap();
+
+        assert_eq!(fs::read_to_string(&feeds_path).unwrap(), feeds_json);
+        assert_eq!(fs::read_to_string(&export_path).unwrap(), feeds_json);
+        assert_eq!(load_sources(&export_path).unwrap()[0].name, "Example");
+        fs::remove_dir_all(test_dir).ok();
     }
 
     #[test]

@@ -19,6 +19,7 @@ fn main() {
             "refresh_feeds",
             "get_feed_sources",
             "save_feed_sources",
+            "export_feed_sources",
             "archive_article",
             "reinstate_article",
             "delete_article",

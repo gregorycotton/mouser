@@ -15,8 +15,10 @@
             --color-accent: #0000FF;
             --color-border: #ccc;
             --color-hover: #f0f8ff;
+            --color-modal-hover: var(--color-hover);
         }
 
+        /* Flexoki theme(s) from stephango.com/flexoki */
         body.theme-flexoki {
             --bg-main: #FFFCF0;
             --bg-modal: #F2F0E5;
@@ -27,8 +29,10 @@
             --color-accent: #24837B;
             --color-border: #E6E4D9;
             --color-hover: #F2F0E5;
+            --color-modal-hover: #E6E4D9;
         }
 
+        /* Flexoki theme(s) from stephango.com/flexoki */
         body.theme-flexoki-dark {
             --bg-main: #100F0F;
             --bg-modal: #1C1B1A;
@@ -39,6 +43,7 @@
             --color-accent: #3AA99F;
             --color-border: #282726;
             --color-hover: #1C1B1A;
+            --color-modal-hover: #282726;
         }
 
         html {
@@ -160,6 +165,10 @@
             background-color: var(--color-hover);
         }
 
+        .modal-content .action-btn:hover:not(.active) {
+            background-color: var(--color-modal-hover);
+        }
+
         .loading-message {
             text-align: center;
             padding: 40px;
@@ -268,6 +277,13 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+        }
+
+        .settings-section-actions,
+        .settings-footer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .settings-header h2,
@@ -430,14 +446,21 @@
             <section class="settings-section">
                 <div class="settings-section-header">
                     <h3>Feeds</h3>
-                    <button id="add-feed-btn" class="action-btn">Add feed</button>
+                    <div class="settings-section-actions">
+                        <button id="load-feeds-btn" class="action-btn">Load JSON</button>
+                        <button id="add-feed-btn" class="action-btn">Add feed</button>
+                    </div>
+                    <input id="load-feeds-input" type="file" accept="application/json,.json" hidden>
                 </div>
                 <div id="feed-settings-list" class="feed-settings-list"></div>
                 <p id="feed-settings-message" class="settings-message"></p>
             </section>
         </div>
         <div class="settings-footer">
-            <button id="save-feeds-btn" class="action-btn">Save feeds</button>
+            <div class="settings-footer-actions">
+                <button id="save-feeds-btn" class="action-btn">Save feeds</button>
+                <button id="export-feeds-btn" class="action-btn">Export feeds</button>
+            </div>
             <button id="done-settings-btn" class="action-btn">Done</button>
         </div>
     </div>
@@ -463,6 +486,7 @@
             const settingsModal = document.getElementById('settings-modal');
             const feedSettingsList = document.getElementById('feed-settings-list');
             const feedSettingsMessage = document.getElementById('feed-settings-message');
+            const loadFeedsInput = document.getElementById('load-feeds-input');
             let feedSources = [];
 
             modalOverlay.style.display = 'none';
@@ -615,6 +639,88 @@
                 });
 
                 return sources;
+            };
+
+            const parseFeedSourcesJson = (json) => {
+                let sources;
+                try {
+                    sources = JSON.parse(json);
+                } catch {
+                    throw new Error('The selected file is not valid JSON.');
+                }
+
+                if (!Array.isArray(sources)) {
+                    throw new Error('Feed JSON must be an array.');
+                }
+
+                return sources.map((source, index) => {
+                    const feedNumber = index + 1;
+                    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+                        throw new Error(`Feed ${feedNumber} must be an object.`);
+                    }
+                    if (typeof source.name !== 'string' || !source.name.trim()) {
+                        throw new Error(`Feed ${feedNumber} needs a name.`);
+                    }
+                    if (typeof source.rss !== 'string' || !source.rss.trim()) {
+                        throw new Error(`Feed ${feedNumber} needs an RSS URL.`);
+                    }
+
+                    const type = source.type || 'blog';
+                    if (!['blog', 'youtube'].includes(type)) {
+                        throw new Error(`Feed ${feedNumber} has an unsupported type.`);
+                    }
+
+                    let url;
+                    try {
+                        url = new URL(source.rss.trim());
+                    } catch {
+                        throw new Error(`Feed ${feedNumber} has an invalid RSS URL.`);
+                    }
+                    if (!['http:', 'https:'].includes(url.protocol)) {
+                        throw new Error(`Feed ${feedNumber} must use an HTTP or HTTPS URL.`);
+                    }
+
+                    return {
+                        name: source.name.trim(),
+                        rss: source.rss.trim(),
+                        type
+                    };
+                });
+            };
+
+            const loadFeedSettingsJson = async () => {
+                const file = loadFeedsInput.files[0];
+                loadFeedsInput.value = '';
+                if (!file) return;
+
+                try {
+                    if (file.size > 5 * 1024 * 1024) {
+                        throw new Error('Feed JSON must be smaller than 5 MB.');
+                    }
+                    const importedSources = parseFeedSourcesJson(await file.text());
+                    feedSources = importedSources;
+                    renderFeedSettings();
+                    const noun = importedSources.length === 1 ? 'feed' : 'feeds';
+                    setFeedSettingsMessage(`Loaded ${importedSources.length} ${noun}. Press Save feeds to apply.`);
+                } catch (error) {
+                    console.error('Error loading feed JSON:', error);
+                    setFeedSettingsMessage(String(error), true);
+                }
+            };
+
+            const exportFeedSettings = async () => {
+                const exportButton = document.getElementById('export-feeds-btn');
+                exportButton.disabled = true;
+                setFeedSettingsMessage('Exporting saved feeds.');
+                try {
+                    const exportPath = await invoke('export_feed_sources');
+                    setFeedSettingsMessage(`Exported saved feeds to ${exportPath}.`);
+                } catch (error) {
+                    console.error('Error exporting feeds:', error);
+                    setFeedSettingsMessage(String(error), true);
+                } finally {
+                    exportButton.disabled = false;
+                }
             };
 
             const openSettings = async () => {
@@ -855,6 +961,8 @@
                 refreshFeeds().catch(() => {});
             });
             document.getElementById('settings-btn').addEventListener('click', openSettings);
+            document.getElementById('load-feeds-btn').addEventListener('click', () => loadFeedsInput.click());
+            loadFeedsInput.addEventListener('change', loadFeedSettingsJson);
             document.getElementById('add-feed-btn').addEventListener('click', () => {
                 feedSources = collectFeedSettings({ allowIncomplete: true });
                 feedSources.push({ name: '', rss: '', type: 'blog' });
@@ -862,6 +970,7 @@
                 setFeedSettingsMessage('');
             });
             document.getElementById('save-feeds-btn').addEventListener('click', saveFeedSettings);
+            document.getElementById('export-feeds-btn').addEventListener('click', exportFeedSettings);
             document.getElementById('done-settings-btn').addEventListener('click', closeSettingsModal);
             document.getElementById('close-settings-btn').addEventListener('click', closeSettingsModal);
             feedSettingsList.addEventListener('click', (event) => {
