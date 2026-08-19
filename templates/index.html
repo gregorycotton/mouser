@@ -10,43 +10,35 @@
             --bg-modal: #f2f2f2;
             --color-text-main: #000000;
             --color-text-popup: #000000;
+            --color-subheading: var(--color-text-main);
             --color-meta: #555;
             --color-accent: #0000FF;
             --color-border: #ccc;
             --color-hover: #f0f8ff;
         }
 
-        body.theme-midnight {
-            --bg-main: #191D34;
-            --bg-modal: #191D34;
-            --color-text-main: #E9E9EC;
-            --color-text-popup: #E9E9EC;
-            --color-meta: #89B6C5;
-            --color-accent: #D97B90;
-            --color-border: #4E5470;
-            --color-hover: #fccad5;
+        body.theme-flexoki {
+            --bg-main: #FFFCF0;
+            --bg-modal: #F2F0E5;
+            --color-text-main: #1C1B1A;
+            --color-text-popup: #1C1B1A;
+            --color-subheading: #403E3C;
+            --color-meta: #6F6E69;
+            --color-accent: #24837B;
+            --color-border: #E6E4D9;
+            --color-hover: #F2F0E5;
         }
 
-        body.theme-earth {
-            --bg-main: #1D1D1D;
-            --bg-modal: #1D1D1D;
-            --color-text-main: #A1986F;
-            --color-text-popup: #A1986F;
-            --color-meta: #506D4F;
-            --color-accent: #7E5237;
-            --color-border: #3F372A;
-            --color-hover: #c9a087;
-        }
-
-        body.theme-post-it {
-            --bg-main: #FBF1C7;
-            --bg-modal: #FBF1C7;
-            --color-text-main: #3C3836;
-            --color-text-popup: #3C3836;
-            --color-meta: #096778;
-            --color-accent: #AB2726;
-            --color-border: #EBDBB2;
-            --color-hover: #e66d6c;
+        body.theme-flexoki-dark {
+            --bg-main: #100F0F;
+            --bg-modal: #1C1B1A;
+            --color-text-main: #CECDC3;
+            --color-text-popup: #CECDC3;
+            --color-subheading: #CECDC3;
+            --color-meta: #878580;
+            --color-accent: #3AA99F;
+            --color-border: #282726;
+            --color-hover: #1C1B1A;
         }
 
         html {
@@ -127,6 +119,10 @@
             margin: 0;
         }
 
+        h2 {
+            color: var(--color-subheading);
+        }
+
         h2 a {
             text-decoration: none;
             color: var(--color-accent);
@@ -160,7 +156,7 @@
             margin: 24px 0 8px;
         }
 
-        .action-btn:hover {
+        .action-btn:hover:not(.active) {
             background-color: var(--color-hover);
         }
 
@@ -277,7 +273,7 @@
         .settings-header h2,
         .settings-section h3 {
             margin: 0;
-            color: var(--color-text-main);
+            color: var(--color-subheading);
         }
 
         .settings-body {
@@ -427,9 +423,8 @@
                 <h3>Theme</h3>
                 <div class="settings-theme-row">
                     <button class="action-btn theme-btn" data-theme="light" title="Light">Light</button>
-                    <button class="action-btn theme-btn" data-theme="midnight" title="Midnight">Midnight</button>
-                    <button class="action-btn theme-btn" data-theme="earth" title="Earth">Earth</button>
-                    <button class="action-btn theme-btn" data-theme="post-it" title="Post-it">Post-it</button>
+                    <button class="action-btn theme-btn" data-theme="flexoki" title="Flexoki (light)">Flexoki (light)</button>
+                    <button class="action-btn theme-btn" data-theme="flexoki-dark" title="Flexoki (dark)">Flexoki (dark)</button>
                 </div>
             </section>
             <section class="settings-section">
@@ -532,7 +527,7 @@
                         background-color: ${computedStyle.getPropertyValue('--bg-modal')};
                         color: ${computedStyle.getPropertyValue('--color-text-popup')};
                     }
-                    h2 { margin-top: 0; font-size: 1.5em; }
+                    h2 { margin-top: 0; font-size: 1.5em; color: ${computedStyle.getPropertyValue('--color-subheading')}; }
                     h2 a { color: ${computedStyle.getPropertyValue('--color-accent')}; text-decoration: none; }
                     p.meta { color: ${computedStyle.getPropertyValue('--color-meta')}; margin-top: -1em; margin-bottom: 1em; font-size: 0.9em; }
                     hr { border: 0; border-top: 1px solid ${computedStyle.getPropertyValue('--color-border')}; margin: 1em 0; }
@@ -998,7 +993,9 @@
                 }, 250);
             });
 
-            applyTheme(localStorage.getItem('preferredTheme') || 'light');
+            const preferredTheme = localStorage.getItem('preferredTheme');
+            const availableTheme = preferredTheme === 'post-it' ? 'flexoki' : preferredTheme;
+            applyTheme(['light', 'flexoki', 'flexoki-dark'].includes(availableTheme) ? availableTheme : 'light');
             loadFeed();
             setInterval(() => {
                 refreshFeeds().catch(() => {});
