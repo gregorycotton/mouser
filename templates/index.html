@@ -107,7 +107,8 @@
         #feed-settings-search {
             width: 100%;
             font-size: 12px;
-            padding: 8px 12px;
+            height: 31px;
+            padding: 5px 10px;
             border: 1px solid var(--color-border);
             box-sizing: border-box;
             background-color: var(--bg-main);
@@ -118,22 +119,45 @@
             margin-top: 10px;
         }
 
-        .feed-tag-filter-row {
+        .feed-search-row {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            color: var(--color-meta);
-            font-size: 12px;
+            align-items: stretch;
+            gap: 10px;
         }
 
-        #feed-tag-filter {
+        .feed-search-row #search-bar {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .feed-tag-filter-menu {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .feed-tag-filter-menu[hidden] {
+            display: none;
+        }
+
+        .feed-filter-tag {
             border: 1px solid var(--color-border);
-            background-color: var(--bg-main);
-            color: var(--color-accent);
+            background: none;
+            color: var(--color-text-main);
             font-family: Arial, Helvetica, sans-serif;
             font-size: 12px;
-            padding: 5px 8px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .feed-filter-tag:hover {
+            background-color: var(--color-hover);
+        }
+
+        .feed-filter-tag.selected {
+            background-color: var(--color-modal-hover);
+            border-color: var(--color-meta);
         }
 
         article {
@@ -145,19 +169,15 @@
         h1 {
             text-align: center;
             margin: 0;
+            color: var(--color-text-main);
         }
 
         h2 {
-            color: var(--color-subheading);
+            color: var(--color-text-main);
         }
 
         h2 a {
             text-decoration: none;
-            color: var(--color-accent);
-        }
-
-        body.theme-flexoki-dark h1,
-        body.theme-flexoki-dark h2 a {
             color: var(--color-text-main);
         }
 
@@ -537,13 +557,11 @@
                 <button id="settings-btn" class="action-btn">Settings</button>
             </div>
         </div>
-        <div class="feed-tag-filter-row">
-            <label for="feed-tag-filter">Filter by tag</label>
-            <select id="feed-tag-filter">
-                <option value="">All feeds</option>
-            </select>
+        <div class="feed-search-row">
+            <input type="text" id="search-bar" placeholder="Search feed">
+            <button id="feed-tag-filter-btn" class="action-btn" type="button" aria-expanded="false">Filter</button>
         </div>
-        <input type="text" id="search-bar" placeholder="Search feed">
+        <div id="feed-tag-filter-menu" class="feed-tag-filter-menu" hidden></div>
         <div id="articles-container"></div>
     </div>
 
@@ -623,7 +641,8 @@
             const modalIframe = document.getElementById('modal-iframe');
             const archiveToggleButton = document.getElementById('archive-toggle-btn');
             const searchBar = document.getElementById('search-bar');
-            const feedTagFilter = document.getElementById('feed-tag-filter');
+            const feedTagFilterButton = document.getElementById('feed-tag-filter-btn');
+            const feedTagFilterMenu = document.getElementById('feed-tag-filter-menu');
             const modalOverlay = document.getElementById('modal-overlay');
             const articleModal = document.getElementById('article-modal');
             const settingsModal = document.getElementById('settings-modal');
@@ -637,6 +656,7 @@
             const loadFeedsInput = document.getElementById('load-feeds-input');
             let feedSources = [];
             let feedTags = [];
+            const selectedFeedTags = new Set();
 
             modalOverlay.style.display = 'none';
             articleModal.style.display = 'none';
@@ -700,7 +720,7 @@
                         background-color: ${computedStyle.getPropertyValue('--bg-modal')};
                         color: ${computedStyle.getPropertyValue('--color-text-popup')};
                     }
-                    h2 { margin-top: 0; font-size: 1.5em; color: ${computedStyle.getPropertyValue('--color-subheading')}; }
+                    h2 { margin-top: 0; font-size: 1.5em; color: ${computedStyle.getPropertyValue('--color-text-popup')}; }
                     h2 a { color: ${computedStyle.getPropertyValue('--color-accent')}; text-decoration: none; }
                     p.meta { color: ${computedStyle.getPropertyValue('--color-meta')}; margin-top: -1em; margin-bottom: 1em; font-size: 0.9em; }
                     hr { border: 0; border-top: 1px solid ${computedStyle.getPropertyValue('--color-border')}; margin: 1em 0; }
@@ -760,14 +780,22 @@
             };
 
             const renderFeedTagFilter = () => {
-                const selectedTag = feedTagFilter.value;
-                feedTagFilter.innerHTML = '';
-                feedTagFilter.appendChild(new Option('All feeds', ''));
-                feedTags.forEach(tag => feedTagFilter.appendChild(new Option(tag, tag)));
-                feedTagFilter.appendChild(new Option('Misc.', 'Misc.'));
-                feedTagFilter.value = Array.from(feedTagFilter.options).some(option => option.value === selectedTag)
-                    ? selectedTag
-                    : '';
+                const availableTags = [...feedTags, 'Misc.'];
+                for (const selectedTag of selectedFeedTags) {
+                    if (!availableTags.includes(selectedTag)) selectedFeedTags.delete(selectedTag);
+                }
+
+                feedTagFilterMenu.innerHTML = '';
+                availableTags.forEach(tag => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'feed-filter-tag';
+                    button.classList.toggle('selected', selectedFeedTags.has(tag));
+                    button.setAttribute('aria-pressed', String(selectedFeedTags.has(tag)));
+                    button.textContent = tag;
+                    button.dataset.tag = tag;
+                    feedTagFilterMenu.appendChild(button);
+                });
             };
 
             const addFeedTag = () => {
@@ -1195,14 +1223,14 @@
                     ? `<button class="action-btn reinstate-btn" data-id="${entry.id}">Reinstate</button>
                        <button class="action-btn permanent-delete-btn" data-id="${entry.id}">Delete</button>`
                     : `<button class="action-btn archive-btn" data-id="${entry.id}">Archive</button>`;
-                const webViewButton = `<button class="action-btn web-view-btn" data-id="${entry.id}">Web view</button>`;
+                const previewButton = `<button class="action-btn preview-btn" data-id="${entry.id}">Preview</button>`;
 
                 articleEl.innerHTML = `
-                    <h2><a href="${escapeAttribute(entry.link)}" class="article-popup-link" data-id="${entry.id}">${entry.title}</a></h2>
+                    <h2><a href="${escapeAttribute(entry.link)}" class="article-web-link" data-id="${entry.id}">${entry.title}</a></h2>
                     <div class="meta">${metaLine}</div>
                     ${summaryHTML}
                     <div class="article-actions">
-                        ${webViewButton}
+                        ${previewButton}
                         ${archiveButtons}
                     </div>
                 `;
@@ -1239,7 +1267,7 @@
                         archived: isShowingArchive,
                         cursor: reset ? null : nextCursor,
                         query: searchBar.value.trim() || null,
-                        tag: feedTagFilter.value || null,
+                        tags: selectedFeedTags.size ? Array.from(selectedFeedTags) : null,
                         limit,
                     });
                     if (requestId !== pageRequestId) return;
@@ -1261,8 +1289,8 @@
                 if (allEntries.length === 0) {
                     const emptyMessage = searchBar.value.trim()
                         ? 'No matching articles.'
-                        : (feedTagFilter.value
-                            ? 'No articles in this tag.'
+                        : (selectedFeedTags.size
+                            ? 'No articles in the selected tags.'
                             : (isShowingArchive ? 'Your archive is empty.' : 'All caught up!'));
                     articlesContainer.innerHTML = `<p class="loading-message">${emptyMessage}</p>`;
                     return;
@@ -1331,7 +1359,20 @@
                 refreshFeeds().catch(() => {});
             });
             document.getElementById('settings-btn').addEventListener('click', openSettings);
-            feedTagFilter.addEventListener('change', () => {
+            feedTagFilterButton.addEventListener('click', () => {
+                feedTagFilterMenu.hidden = !feedTagFilterMenu.hidden;
+                feedTagFilterButton.setAttribute('aria-expanded', String(!feedTagFilterMenu.hidden));
+            });
+            feedTagFilterMenu.addEventListener('click', event => {
+                const button = event.target.closest('.feed-filter-tag');
+                if (!button) return;
+                const tag = button.dataset.tag;
+                if (selectedFeedTags.has(tag)) {
+                    selectedFeedTags.delete(tag);
+                } else {
+                    selectedFeedTags.add(tag);
+                }
+                renderFeedTagFilter();
                 loadArticlesPage({ reset: true }).catch(error => {
                     console.error('Error filtering articles by tag:', error);
                 });
@@ -1398,12 +1439,17 @@
 
             articlesContainer.addEventListener('click', async function (e) {
                 const target = e.target;
-                const popupLink = target.closest('.article-popup-link');
+                const articleWebLink = target.closest('.article-web-link');
 
-                if (popupLink) {
+                if (articleWebLink) {
                     e.preventDefault();
-                    const entry = allEntries.find(item => item.id === popupLink.dataset.id);
-                    if (entry) openArticleModal(entry);
+                    const entry = allEntries.find(item => item.id === articleWebLink.dataset.id);
+                    if (!entry) return;
+                    try {
+                        await invoke('open_external_url', { url: entry.link });
+                    } catch (error) {
+                        console.error('Error opening article in browser:', error);
+                    }
                 }
                 else if (target.id === 'load-more-btn') {
                     target.disabled = true;
@@ -1444,17 +1490,9 @@
                         target.disabled = false;
                     }
                 }
-                else if (target.classList.contains('web-view-btn')) {
+                else if (target.classList.contains('preview-btn')) {
                     const entry = allEntries.find(item => item.id === target.dataset.id);
-                    if (!entry) return;
-                    target.disabled = true;
-                    try {
-                        await invoke('open_external_url', { url: entry.link });
-                    } catch (error) {
-                        console.error('Error opening web view:', error);
-                    } finally {
-                        target.disabled = false;
-                    }
+                    if (entry) openArticleModal(entry);
                 }
             });
 

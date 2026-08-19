@@ -229,15 +229,18 @@ async fn get_articles_page(
     archived: bool,
     cursor: Option<ArticleCursor>,
     query: Option<String>,
-    tag: Option<String>,
+    tags: Option<Vec<String>>,
     limit: Option<u32>,
 ) -> Result<ArticlePage, String> {
     let db_path = state.db_path.clone();
     let feeds_path = state.feeds_path.clone();
     let limit = limit.unwrap_or(20).clamp(1, 200) as usize;
     tauri::async_runtime::spawn_blocking(move || {
-        let feed_urls = tag
-            .map(|tag| load_feed_config(&feeds_path).map(|config| feed_urls_for_tag(&config, &tag)))
+        let feed_urls = tags
+            .filter(|tags| !tags.is_empty())
+            .map(|tags| {
+                load_feed_config(&feeds_path).map(|config| feed_urls_for_tags(&config, &tags))
+            })
             .transpose()?;
         read_articles_page(&db_path, archived, cursor, query, feed_urls, limit)
     })
@@ -606,18 +609,20 @@ fn clean_source_tags(tags: Vec<String>, available_tags: &[String]) -> Result<Vec
     Ok(cleaned)
 }
 
-fn feed_urls_for_tag(config: &FeedConfig, tag: &str) -> Vec<String> {
+fn feed_urls_for_tags(config: &FeedConfig, tags: &[String]) -> Vec<String> {
     config
         .feeds
         .iter()
         .filter(|feed| {
-            if tag.eq_ignore_ascii_case("Misc.") {
-                feed.tags.is_empty()
-            } else {
-                feed.tags
-                    .iter()
-                    .any(|feed_tag| feed_tag.eq_ignore_ascii_case(tag))
-            }
+            tags.iter().any(|tag| {
+                if tag.eq_ignore_ascii_case("Misc.") {
+                    feed.tags.is_empty()
+                } else {
+                    feed.tags
+                        .iter()
+                        .any(|feed_tag| feed_tag.eq_ignore_ascii_case(tag))
+                }
+            })
         })
         .map(|feed| feed.rss.clone())
         .collect()
@@ -1325,12 +1330,16 @@ mod tests {
         };
 
         assert_eq!(
-            feed_urls_for_tag(&config, "tech"),
+            feed_urls_for_tags(&config, &["tech".to_string()]),
             vec!["https://example.com/tagged"]
         );
         assert_eq!(
-            feed_urls_for_tag(&config, "Misc."),
+            feed_urls_for_tags(&config, &["Misc.".to_string()]),
             vec!["https://example.com/misc"]
+        );
+        assert_eq!(
+            feed_urls_for_tags(&config, &["Culture".to_string(), "Misc.".to_string()]),
+            vec!["https://example.com/tagged", "https://example.com/misc"]
         );
     }
 
