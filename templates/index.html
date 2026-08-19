@@ -51,7 +51,7 @@
         }
 
         body {
-            font-family: "Times New Roman", Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-size: 16px;
             line-height: 1.6;
             background-color: var(--bg-main);
@@ -62,7 +62,7 @@
 
         pre {
             font-size: 4px;
-            font-family: "Times New Roman", Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
         }
 
         .container {
@@ -133,6 +133,11 @@
             color: var(--color-accent);
         }
 
+        body.theme-flexoki-dark h1,
+        body.theme-flexoki-dark h2 a {
+            color: var(--color-text-main);
+        }
+
         .meta {
             color: var(--color-meta);
         }
@@ -144,7 +149,7 @@
             padding: 5px 10px;
             border-radius: 0;
             cursor: pointer;
-            font-family: "Times New Roman", Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-size: 12px;
             text-decoration: none;
             display: inline-block;
@@ -252,7 +257,7 @@
             border: none;
             border-bottom: 1px solid var(--color-border);
             padding: 0;
-            font-family: "Times New Roman", Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-size: 16px;
             -moz-appearance: textfield;
         }
@@ -341,7 +346,7 @@
             background-color: var(--bg-main);
             color: var(--color-text-main);
             box-sizing: border-box;
-            font-family: "Times New Roman", Times, serif;
+            font-family: Arial, Helvetica, sans-serif;
             font-size: 12px;
             padding: 6px 8px;
             height: 31px;
@@ -546,7 +551,7 @@
                 }
                 style.innerHTML = `
                     body {
-                        font-family: 'Times New Roman', Times, serif;
+                        font-family: Arial, Helvetica, sans-serif;
                         line-height: 1.6; margin: 10px; padding: 0;
                         background-color: ${computedStyle.getPropertyValue('--bg-modal')};
                         color: ${computedStyle.getPropertyValue('--color-text-popup')};
