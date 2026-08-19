@@ -103,7 +103,8 @@
             color: var(--bg-main);
         }
 
-        #search-bar {
+        #search-bar,
+        #feed-settings-search {
             width: 100%;
             font-size: 12px;
             padding: 8px 12px;
@@ -111,6 +112,10 @@
             box-sizing: border-box;
             background-color: var(--bg-main);
             color: var(--color-text-main);
+        }
+
+        #feed-settings-search {
+            margin-top: 10px;
         }
 
         article {
@@ -339,6 +344,10 @@
             align-items: center;
         }
 
+        .feed-settings-row[hidden] {
+            display: none;
+        }
+
         .feed-settings-row input,
         .feed-settings-row select {
             min-width: 0;
@@ -457,7 +466,9 @@
                     </div>
                     <input id="load-feeds-input" type="file" accept="application/json,.json" hidden>
                 </div>
+                <input type="text" id="feed-settings-search" placeholder="Search feeds">
                 <div id="feed-settings-list" class="feed-settings-list"></div>
+                <p id="feed-search-empty" class="settings-message" hidden>No matching feeds.</p>
                 <p id="feed-settings-message" class="settings-message"></p>
             </section>
         </div>
@@ -490,6 +501,8 @@
             const articleModal = document.getElementById('article-modal');
             const settingsModal = document.getElementById('settings-modal');
             const feedSettingsList = document.getElementById('feed-settings-list');
+            const feedSettingsSearch = document.getElementById('feed-settings-search');
+            const feedSearchEmpty = document.getElementById('feed-search-empty');
             const feedSettingsMessage = document.getElementById('feed-settings-message');
             const loadFeedsInput = document.getElementById('load-feeds-input');
             let feedSources = [];
@@ -581,6 +594,23 @@
                 feedSettingsMessage.style.color = isError ? 'var(--color-accent)' : 'var(--color-meta)';
             };
 
+            const filterFeedSettings = () => {
+                const query = feedSettingsSearch.value.trim().toLowerCase();
+                const rows = feedSettingsList.querySelectorAll('.feed-settings-row');
+                let matchingRows = 0;
+
+                rows.forEach(row => {
+                    const searchableText = Array.from(row.querySelectorAll('input, select'))
+                        .map(field => field.value)
+                        .join(' ')
+                        .toLowerCase();
+                    row.hidden = Boolean(query) && !searchableText.includes(query);
+                    if (!row.hidden) matchingRows += 1;
+                });
+
+                feedSearchEmpty.hidden = !query || matchingRows > 0 || rows.length === 0;
+            };
+
             const renderFeedSettings = () => {
                 feedSettingsList.innerHTML = '';
 
@@ -589,6 +619,7 @@
                     emptyMessage.className = 'settings-message';
                     emptyMessage.textContent = 'No feeds yet.';
                     feedSettingsList.appendChild(emptyMessage);
+                    filterFeedSettings();
                     return;
                 }
 
@@ -624,6 +655,8 @@
                     row.append(nameInput, rssInput, typeSelect, deleteButton);
                     feedSettingsList.appendChild(row);
                 });
+
+                filterFeedSettings();
             };
 
             const collectFeedSettings = ({ allowIncomplete = false } = {}) => {
@@ -704,6 +737,7 @@
                     }
                     const importedSources = parseFeedSourcesJson(await file.text());
                     feedSources = importedSources;
+                    feedSettingsSearch.value = '';
                     renderFeedSettings();
                     const noun = importedSources.length === 1 ? 'feed' : 'feeds';
                     setFeedSettingsMessage(`Loaded ${importedSources.length} ${noun}. Press Save feeds to apply.`);
@@ -732,6 +766,7 @@
                 modalOverlay.style.display = 'block';
                 settingsModal.style.display = 'flex';
                 setFeedSettingsMessage('Loading feeds.');
+                feedSettingsSearch.value = '';
                 feedSettingsList.innerHTML = '';
 
                 try {
@@ -966,11 +1001,13 @@
                 refreshFeeds().catch(() => {});
             });
             document.getElementById('settings-btn').addEventListener('click', openSettings);
+            feedSettingsSearch.addEventListener('input', filterFeedSettings);
             document.getElementById('load-feeds-btn').addEventListener('click', () => loadFeedsInput.click());
             loadFeedsInput.addEventListener('change', loadFeedSettingsJson);
             document.getElementById('add-feed-btn').addEventListener('click', () => {
                 feedSources = collectFeedSettings({ allowIncomplete: true });
                 feedSources.push({ name: '', rss: '', type: 'blog' });
+                feedSettingsSearch.value = '';
                 renderFeedSettings();
                 setFeedSettingsMessage('');
             });
